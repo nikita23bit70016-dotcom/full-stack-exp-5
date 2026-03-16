@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexGen | Product Hub</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header>
+        <div class="logo">NEXGEN INVENTORY</div>
+        <div class="status-indicator">
+            <div class="dot online"></div>
+            <span>Warehouse Sync: Active</span>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="controls">
+            <h1>Product Registry</h1>
+            <button onclick="openModal()">+ Add Product</button>
+        </div>
+
+        <div id="productGrid" class="grid">
+            <!-- Cards will be injected here -->
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="productModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Register Product</h2>
+            <form id="productForm">
+                <input type="hidden" id="productId">
+                <label>Product Name</label>
+                <input type="text" id="productName" placeholder="e.g. Quantum Processor" required>
+                
+                <label>Category</label>
+                <select id="productCategory" required>
+                    <option value="Electronics">Electronics</option>
+                    <option value="Hardware">Hardware</option>
+                    <option value="Software">Software</option>
+                    <option value="Apparel">Apparel</option>
+                </select>
+
+                <div style="display: flex; gap: 15px;">
+                    <div style="flex: 1;">
+                        <label>Price ($)</label>
+                        <input type="number" id="productPrice" step="0.01" min="0" value="0.00" required>
+                    </div>
+                    <div style="flex: 1;">
+                        <label>Stock Qty</label>
+                        <input type="number" id="productStock" min="0" value="0" required>
+                    </div>
+                </div>
+
+                <label>Description</label>
+                <textarea id="productDesc" rows="3" placeholder="Specifications..."></textarea>
+
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button type="submit" style="flex: 2;">Confirm Data</button>
+                    <button type="button" onclick="closeModal()" class="btn-toggle" style="flex: 1;">Abort</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/products';
+        const grid = document.getElementById('productGrid');
+        const modal = document.getElementById('productModal');
+        const form = document.getElementById('productForm');
+
+        async function fetchProducts() {
+            const res = await fetch(API_BASE);
+            const products = await res.json();
+            renderProducts(products);
+        }
+
+        function renderProducts(products) {
+            grid.innerHTML = products.length ? '' : '<p style="color:var(--text-dim)">Vault is empty. Add your first product.</p>';
+            products.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-header">
+                        <span class="category">${p.category}</span>
+                        <div class="status-indicator">
+                            <div class="dot ${p.status === 'Available' ? 'online' : 'offline'}"></div>
+                            <span style="font-size:0.75rem">${p.status}</span>
+                        </div>
+                    </div>
+                    <h3>${p.name}</h3>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: 600;">
+                        <span style="color: var(--accent-primary)">$${p.price.toFixed(2)}</span>
+                        <span style="color: var(--text-dim)">Stock: ${p.stockQuantity}</span>
+                    </div>
+                    <p>${p.description || 'No datasheet provided.'}</p>
+                    <div class="actions">
+                        <button class="btn-toggle" onclick="toggleAvailability(${p.id})">${p.status === 'Available' ? 'Mark Sold Out' : 'Mark Available'}</button>
+                        <button class="btn-delete" onclick="deleteProduct(${p.id})">Delete</button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('productId').value;
+            const data = {
+                name: document.getElementById('productName').value,
+                category: document.getElementById('productCategory').value,
+                price: parseFloat(document.getElementById('productPrice').value),
+                stockQuantity: parseInt(document.getElementById('productStock').value),
+                description: document.getElementById('productDesc').value
+            };
+
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `${API_BASE}/${id}` : API_BASE;
+
+            await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            closeModal();
+            fetchProducts();
+        };
+
+        async function toggleAvailability(id) {
+            await fetch(`${API_BASE}/${id}/toggle-availability`, { method: 'PATCH' });
+            fetchProducts();
+        }
+
+        async function deleteProduct(id) {
+            if (confirm('Erase product from ledger?')) {
+                await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
+                fetchProducts();
+            }
+        }
+
+        function openModal(p = null) {
+            modal.style.display = 'flex';
+            if (p) {
+                document.getElementById('modalTitle').innerText = 'Update Product';
+                document.getElementById('productId').value = p.id;
+                document.getElementById('productName').value = p.name;
+                document.getElementById('productCategory').value = p.category;
+                document.getElementById('productPrice').value = p.price;
+                document.getElementById('productStock').value = p.stockQuantity;
+                document.getElementById('productDesc').value = p.description;
+            } else {
+                form.reset();
+                document.getElementById('productId').value = '';
+                document.getElementById('modalTitle').innerText = 'Register Product';
+            }
+        }
+
+        function closeModal() { modal.style.display = 'none'; }
+
+        window.onclick = (e) => { if (e.target == modal) closeModal(); }
+
+        fetchProducts();
+    </script>
+
+</body>
+</html>
